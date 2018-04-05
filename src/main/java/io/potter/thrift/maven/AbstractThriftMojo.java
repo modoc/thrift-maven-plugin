@@ -5,13 +5,24 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.resolver.ArtifactResolutionException;
+import org.apache.maven.artifact.resolver.ArtifactResolutionRequest;
+import org.apache.maven.artifact.resolver.ArtifactResolutionResult;
+import org.apache.maven.artifact.resolver.ArtifactResolver;
+import org.apache.maven.artifact.resolver.ResolutionErrorHandler;
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
+import org.apache.maven.artifact.versioning.VersionRange;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.apache.maven.repository.RepositorySystem;
 import org.codehaus.plexus.util.FileUtils;
+import org.codehaus.plexus.util.Os;
 import org.codehaus.plexus.util.cli.CommandLineException;
 import org.codehaus.plexus.util.io.RawInputStreamFacade;
 
@@ -54,7 +65,7 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
      * @readonly
      * @required
      */
-    protected MavenProject project;
+    MavenProject project;
 
     /**
      * A helper used to add resources to the project.
@@ -62,15 +73,65 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
      * @component
      * @required
      */
-    protected MavenProjectHelper projectHelper;
+    MavenProjectHelper projectHelper;
+
+    /**
+     * The current Maven Session Object.
+     *
+     * @@parameter default-value="${session}"
+     * @readonly
+     */
+    protected MavenSession session;
+
+    /**
+     * A factory for Maven artifact definitions.
+     *
+     * @parameter
+     * @readonly
+     * @required
+     */
+    private ArtifactFactory artifactFactory;
+
+    /**
+     * A component that implements resolution of Maven artifacts from repositories.
+     *
+     * @parameter
+     * @readonly
+     * @required
+     */
+    private ArtifactResolver artifactResolver;
+
+    /**
+     * A component that handles resolution of Maven artifacts.
+     *
+     * @parameter
+     * @readonly
+     * @required
+     */
+    private RepositorySystem repositorySystem;
+
+    /**
+     * A component that handles resolution errors.
+     *
+     * @parameter
+     * @readonly
+     * @required
+     */
+    private ResolutionErrorHandler resolutionErrorHandler;
 
     /**
      * This is the path to the {@code thrift} executable. By default it will search the {@code $PATH}.
      *
-     * @parameter default-value="thrift"
-     * @required
+     * @parameter default-value=""
      */
     private String thriftExecutable;
+
+    /**
+     * work when thriftExecutable is not set
+     *
+     * @parameter
+     */
+    private String thriftArtifact;
 
     /**
      * This string is passed to the {@code --gen} option of the {@code thrift} parameter. By default
@@ -102,6 +163,22 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
      * @required
      */
     private ArtifactRepository localRepository;
+
+    /**
+     * Remote repositories for artifact resolution.
+     *
+     * @parameter default-value="${project.remoteArtifactRepositories}"
+     * @required
+     * @readonly
+     */
+    private List<ArtifactRepository> remoteRepositories;
+
+    /**
+     * A directory where native launchers for java protoc plugins will be generated.
+     *
+     * @parameter default-value=""${project.build.directory}/thrift-plugins"
+     */
+    private File thriftPluginDirectory;
 
     /**
      * Set this to {@code false} to disable hashing of dependent jar paths.
@@ -156,10 +233,21 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
                 } else {
                     ImmutableSet<File> derivedThriftPathElements =
                             makeThriftPathFromJars(temporaryThriftFileDirectory, getDependencyArtifactFiles());
-                    outputDirectory.mkdirs();
+                    Preconditions.checkArgument(outputDirectory.mkdirs(), "create output directory fail");
 
                     // Quick fix to fix issues with two mvn installs in a row (ie no clean)
                     FileUtils.cleanDirectory(outputDirectory);
+
+                    if (thriftExecutable == null && thriftArtifact != null) {
+                        final Artifact artifact = createDependencyArtifact(thriftArtifact);
+                        final File file = resolveBinaryArtifact(artifact);
+                        thriftExecutable = file.getAbsolutePath();
+                    }
+                    if (thriftExecutable == null) {
+                        // Try to fall back to 'protoc' in $PATH
+                        getLog().warn("No 'thriftExecutable' parameter is configured, using the default: 'thrift'");
+                        thriftExecutable = "thrift";
+                    }
 
                     Thrift thrift = new Thrift.Builder(thriftExecutable, outputDirectory)
                             .setGenerator(generator)
@@ -190,12 +278,10 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
         }
     }
 
-    ImmutableSet<File> findGeneratedFilesInDirectory(File directory) throws IOException {
+    private ImmutableSet<File> findGeneratedFilesInDirectory(File directory) throws IOException {
         if (directory == null || !directory.isDirectory())
             return ImmutableSet.of();
 
-        // TODO(gak): plexus-utils needs generics
-        @SuppressWarnings("unchecked")
         List<File> javaFilesInDirectory = FileUtils.getFiles(directory, "**/*.java", null);
         return ImmutableSet.copyOf(javaFilesInDirectory);
     }
@@ -245,10 +331,7 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
         return ImmutableSet.copyOf(dependencyArtifactFiles);
     }
 
-    /**
-     * @throws IOException
-     */
-    ImmutableSet<File> makeThriftPathFromJars(File temporaryThriftFileDirectory, Iterable<File> classpathElementFiles)
+    private ImmutableSet<File> makeThriftPathFromJars(File temporaryThriftFileDirectory, Iterable<File> classpathElementFiles)
             throws IOException, MojoExecutionException {
         Preconditions.checkNotNull(classpathElementFiles, "classpathElementFiles");
         // clean the temporary directory to ensure that stale files aren't used
@@ -297,14 +380,12 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
         return ImmutableSet.copyOf(thriftDirectories);
     }
 
-    ImmutableSet<File> findThriftFilesInDirectory(File directory) throws IOException {
+    private ImmutableSet<File> findThriftFilesInDirectory(File directory) throws IOException {
         Preconditions.checkNotNull(directory);
         Preconditions.checkArgument(directory.isDirectory(), "%s is not a directory", directory);
 
         final Joiner joiner = Joiner.on(',');
 
-        // TODO(gak): plexus-utils needs generics
-        @SuppressWarnings("unchecked")
         List<File> thriftFilesInDirectory = FileUtils.getFiles(directory, joiner.join(includes), joiner.join(excludes));
         return ImmutableSet.copyOf(thriftFilesInDirectory);
     }
@@ -357,12 +438,120 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
 
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
 
-    public static String toHexString(byte[] byteArray) {
+    private static String toHexString(byte[] byteArray) {
         final StringBuilder hexString = new StringBuilder(2 * byteArray.length);
         for (final byte b : byteArray) {
             hexString.append(HEX_CHARS[(b & 0xF0) >> 4]).append(HEX_CHARS[b & 0x0F]);
         }
         return hexString.toString();
+    }
+
+    private File resolveBinaryArtifact(final Artifact artifact) throws MojoExecutionException {
+        final ArtifactResolutionResult result;
+        try {
+            final ArtifactResolutionRequest request = new ArtifactResolutionRequest()
+                    .setArtifact(project.getArtifact())
+                    .setResolveRoot(false)
+                    .setResolveTransitively(false)
+                    .setArtifactDependencies(Collections.singleton(artifact))
+                    .setManagedVersionMap(Collections.<String, Artifact>emptyMap())
+                    .setLocalRepository(localRepository)
+                    .setRemoteRepositories(remoteRepositories)
+                    .setOffline(session.isOffline())
+                    .setForceUpdate(session.getRequest().isUpdateSnapshots())
+                    .setServers(session.getRequest().getServers())
+                    .setMirrors(session.getRequest().getMirrors())
+                    .setProxies(session.getRequest().getProxies());
+
+            result = repositorySystem.resolve(request);
+
+            resolutionErrorHandler.throwErrors(request, result);
+        } catch (ArtifactResolutionException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+
+        Set<Artifact> artifacts = result.getArtifacts();
+
+        if (artifacts == null || artifacts.isEmpty()) {
+            throw new MojoExecutionException("Unable to resolve plugin artifact");
+        }
+
+        Artifact resolvedBinaryArtifact = artifacts.iterator().next();
+        if (getLog().isDebugEnabled()) {
+            getLog().debug("Resolved artifact: " + resolvedBinaryArtifact);
+        }
+
+        // Copy the file to the project build directory and make it executable
+        File sourceFile = resolvedBinaryArtifact.getFile();
+        String sourceFileName = sourceFile.getName();
+        String targetFileName;
+        if (Os.isFamily(Os.FAMILY_WINDOWS) && !sourceFileName.endsWith(".exe")) {
+            targetFileName = sourceFileName + ".exe";
+        } else {
+            targetFileName = sourceFileName;
+        }
+        final File targetFile = new File(thriftPluginDirectory, targetFileName);
+        if (targetFile.exists()) {
+            // The file must have already been copied in a prior plugin execution/invocation
+            getLog().debug("Executable file already exists: " + targetFile.getAbsolutePath());
+            return targetFile;
+        }
+        try {
+            FileUtils.forceMkdir(thriftPluginDirectory);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Unable to create directory " + thriftPluginDirectory, e);
+        }
+        try {
+            FileUtils.copyFile(sourceFile, targetFile);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Unable to copy the file to " + thriftPluginDirectory, e);
+        }
+        if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+            targetFile.setExecutable(true);
+        }
+
+        if (getLog().isDebugEnabled()) {
+            getLog().debug("Executable file: " + targetFile.getAbsolutePath());
+        }
+        return targetFile;
+    }
+
+        /**
+         * Creates a dependency artifact from a specification in
+         * {@code groupId:artifactId:version[:type[:classifier]]} format.
+         *
+         * @param artifactSpec artifact specification.
+         * @return artifact object instance.
+         * @throws MojoExecutionException if artifact specification cannot be parsed.
+         */
+    private Artifact createDependencyArtifact(String artifactSpec) throws MojoExecutionException {
+        final String[] parts = artifactSpec.split(":");
+        if (parts.length < 3 || parts.length > 5) {
+            throw new MojoExecutionException(
+                    "Invalid artifact specification format"
+                            + ", expected: groupId:artifactId:version[:type[:classifier]]"
+                            + ", actual: " + artifactSpec);
+        }
+        final String type = parts.length >= 4 ? parts[3] : "exe";
+        final String classifier = parts.length == 5 ? parts[4] : null;
+        return createDependencyArtifact(parts[0], parts[1], parts[2], type, classifier);
+    }
+
+    private Artifact createDependencyArtifact(String groupId, String artifactId, String version,
+                                              String type, String classifier) throws MojoExecutionException {
+        VersionRange versionSpec;
+        try {
+            versionSpec = VersionRange.createFromVersionSpec(version);
+        } catch (final InvalidVersionSpecificationException e) {
+            throw new MojoExecutionException("Invalid version specification", e);
+        }
+        return artifactFactory.createDependencyArtifact(
+                groupId,
+                artifactId,
+                versionSpec,
+                type,
+                classifier,
+                Artifact.SCOPE_RUNTIME);
     }
 
 }

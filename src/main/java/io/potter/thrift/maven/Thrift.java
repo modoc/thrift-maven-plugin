@@ -85,11 +85,11 @@ final class Thrift {
      * <p/>
      * This method has been made visible for testing only.
      *
-     * @param thriftFile
+     * @param thriftFile source .thrift file
      * @return A list consisting of the executable followed by any arguments.
      */
-    ImmutableList<String> buildThriftCommand(final File thriftFile) {
-        final List<String> command = Lists.newLinkedList();
+    private ImmutableList<String> buildThriftCommand(File thriftFile) {
+        List<String> command = Lists.newLinkedList();
         // add the executable
         for (File thriftPathElement : thriftPathElements) {
             command.add("-I");

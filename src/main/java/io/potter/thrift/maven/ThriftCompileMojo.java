@@ -2,6 +2,10 @@ package io.potter.thrift.maven;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 
 import java.io.File;
 import java.util.List;
@@ -13,28 +17,25 @@ import java.util.List;
  * referenced. Finally, it adds the thrift files to the project as resources so
  * that they are included in the final artifact.
  *
- * @phase generate-sources
- * @goal compile
- * @requiresDependencyResolution compile
- *
  * Created by Fucheng on 2018/04/05.
  */
+@Mojo(
+        name = "compile",
+        requiresDependencyResolution = ResolutionScope.COMPILE,
+        defaultPhase = LifecyclePhase.GENERATE_SOURCES
+)
 public final class ThriftCompileMojo extends AbstractThriftMojo {
 
     /**
      * The source directories containing the sources to be compiled.
-     *
-     * @parameter default-value="${basedir}/src/main/thrift"
-     * @required
      */
+    @Parameter(defaultValue = "${basedir}/src/main/thrift", required = true)
     private File thriftSourceRoot;
 
     /**
      * This is the directory into which the {@code .java} will be created.
-     *
-     * @parameter default-value="${project.build.directory}/generated-sources/thrift"
-     * @required
      */
+    @Parameter(defaultValue = "${project.build.directory}/generated-sources/thrift", required = true)
     private File outputDirectory;
 
     @Override

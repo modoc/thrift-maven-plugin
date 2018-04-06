@@ -18,6 +18,8 @@ import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
+import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
 import org.apache.maven.repository.RepositorySystem;
@@ -60,124 +62,92 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
 
     /**
      * The current Maven project.
-     *
-     * @parameter default-value="${project}"
-     * @readonly
-     * @required
      */
+    @Parameter(defaultValue = "${project}", readonly = true)
     MavenProject project;
 
     /**
      * A helper used to add resources to the project.
-     *
-     * @component
-     * @required
      */
+    @Component
     MavenProjectHelper projectHelper;
 
     /**
      * The current Maven Session Object.
-     *
-     * @@parameter default-value="${session}"
-     * @readonly
      */
+    @Parameter(defaultValue = "${session}", readonly = true)
     protected MavenSession session;
 
     /**
      * A factory for Maven artifact definitions.
-     *
-     * @parameter
-     * @readonly
-     * @required
      */
+    @Component
     private ArtifactFactory artifactFactory;
 
     /**
      * A component that implements resolution of Maven artifacts from repositories.
-     *
-     * @parameter
-     * @readonly
-     * @required
      */
-    private ArtifactResolver artifactResolver;
+    @Component
+    ArtifactResolver artifactResolver;
 
     /**
      * A component that handles resolution of Maven artifacts.
-     *
-     * @parameter
-     * @readonly
-     * @required
      */
-    private RepositorySystem repositorySystem;
+    @Component
+    RepositorySystem repositorySystem;
 
     /**
      * A component that handles resolution errors.
-     *
-     * @parameter
-     * @readonly
-     * @required
      */
-    private ResolutionErrorHandler resolutionErrorHandler;
+    @Component
+    ResolutionErrorHandler resolutionErrorHandler;
 
     /**
      * This is the path to the {@code thrift} executable. By default it will search the {@code $PATH}.
-     *
-     * @parameter default-value=""
      */
+    @Parameter(defaultValue = "")
     private String thriftExecutable;
 
     /**
      * work when thriftExecutable is not set
-     *
-     * @parameter
      */
+    @Parameter(defaultValue = "")
     private String thriftArtifact;
 
     /**
      * This string is passed to the {@code --gen} option of the {@code thrift} parameter. By default
      * it will generate Java output. The main reason for this option is to be able to add options
      * to the Java generator - if you generate something else, you're on your own.
-     *
-     * @parameter default-value="java:hashcode"
      */
+    @Parameter(defaultValue = "java:hashcode")
     private String generator;
 
-    /**
-     * @parameter
-     */
+    @Parameter()
     private File[] additionalThriftPathElements = new File[]{};
 
     /**
      * Since {@code thrift} cannot access jars, thrift files in dependencies are extracted to this location
      * and deleted on exit. This directory is always cleaned during execution.
-     *
-     * @parameter expression="${project.build.directory}/thrift-dependencies"
-     * @required
      */
+    @Parameter(defaultValue = "${project.build.directory}/thrift-dependencies", required = true)
     private File temporaryThriftFileDirectory;
 
     /**
      * This is the path to the local maven {@code repository}.
-     *
-     * @parameter default-value="${localRepository}"
-     * @required
      */
+    @Parameter(defaultValue = "${localRepository}", required = true)
     private ArtifactRepository localRepository;
 
     /**
      * Remote repositories for artifact resolution.
-     *
-     * @parameter default-value="${project.remoteArtifactRepositories}"
-     * @required
-     * @readonly
      */
+    @Parameter(defaultValue = "${project.remoteArtifactRepositories}", required = true, readonly = true)
     private List<ArtifactRepository> remoteRepositories;
 
     /**
      * A directory where native launchers for java protoc plugins will be generated.
-     *
-     * @parameter default-value=""${project.build.directory}/thrift-plugins"
      */
+    @Parameter(defaultValue = "${project.build.directory}/thrift-plugins")
     private File thriftPluginDirectory;
 
     /**
@@ -186,30 +156,20 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
      * This plugin expands jars on the classpath looking for embedded .thrift files.
      * Normally these paths are hashed (MD5) to avoid issues with long file names on windows.
      * However if this property is set to {@code false} longer paths will be used.
-     *
-     * @parameter default-value="true"
-     * @required
      */
+    @Parameter(defaultValue = "true", required = true)
     private boolean hashDependentPaths;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private Set<String> includes = ImmutableSet.of(DEFAULT_INCLUDES);
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private Set<String> excludes = ImmutableSet.of();
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private long staleMillis = 0;
 
-    /**
-     * @parameter
-     */
+    @Parameter
     private boolean checkStaleness = false;
 
     /**
@@ -233,7 +193,7 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
                 } else {
                     ImmutableSet<File> derivedThriftPathElements =
                             makeThriftPathFromJars(temporaryThriftFileDirectory, getDependencyArtifactFiles());
-                    Preconditions.checkArgument(outputDirectory.mkdirs(), "create output directory fail");
+                    FileUtils.forceMkdir(outputDirectory);
 
                     // Quick fix to fix issues with two mvn installs in a row (ie no clean)
                     FileUtils.cleanDirectory(outputDirectory);
@@ -296,14 +256,18 @@ public abstract class AbstractThriftMojo extends AbstractMojo {
     }
 
     private void checkParameters() {
-        Preconditions.checkNotNull(project, "project");
-        Preconditions.checkNotNull(projectHelper, "projectHelper");
-        Preconditions.checkNotNull(thriftExecutable, "thriftExecutable");
-        Preconditions.checkNotNull(generator, "generator");
+        Preconditions.checkNotNull(project, "project missing");
+        Preconditions.checkNotNull(projectHelper, "projectHelper missing");
+        Preconditions.checkNotNull(artifactFactory, "artifactFactory missing");
+        Preconditions.checkNotNull(artifactResolver, "artifactResolver missing");
+        Preconditions.checkNotNull(repositorySystem, "repositorySystem missing");
+        Preconditions.checkNotNull(resolutionErrorHandler, "resolutionErrorHandler missing");
+        Preconditions.checkArgument(thriftExecutable != null || thriftArtifact != null, "thriftExecutable or thriftArtifact missing");
+        Preconditions.checkNotNull(generator, "generator missing");
         final File thriftSourceRoot = getThriftSourceRoot();
         Preconditions.checkNotNull(thriftSourceRoot);
         Preconditions.checkArgument(!thriftSourceRoot.isFile(), "thriftSourceRoot is a file, not a diretory");
-        Preconditions.checkNotNull(temporaryThriftFileDirectory, "temporaryThriftFileDirectory");
+        Preconditions.checkNotNull(temporaryThriftFileDirectory, "temporaryThriftFileDirectory missing");
         Preconditions.checkState(!temporaryThriftFileDirectory.isFile(), "temporaryThriftFileDirectory is a file, not a directory");
         final File outputDirectory = getOutputDirectory();
         Preconditions.checkNotNull(outputDirectory);

@@ -18,10 +18,10 @@ thrift compiler with pre-compiled archive, only work with java.
                 <artifactId>thrift-maven-plugin</artifactId>
                 <version>1.0-SNAPSHOT</version>
                 <configuration>
-                    <thriftExecutable>thrift</thriftExecutable>
+                    <!--<thriftExecutable>thrift</thriftExecutable>-->
                     <generator>java:private-members</generator>
                     <thriftSourceRoot>${project.basedir}/src/thrift/</thriftSourceRoot>
-                    <thriftArtifact>com.google.protobuf:protoc:3.5.1:exe:${os.detected.classifier}</thriftArtifact>
+                    <thriftArtifact>io.potter.thrift:thriftc:0.11.0:exe:${os.detected.classifier}</thriftArtifact>
                 </configuration>
                 <executions>
                     <execution>
@@ -59,4 +59,4 @@ staleMillis | 0 | only work when `checkStaleness`==`true`, thrift files' modify 
 * [dtrott/maven-thrift-plugin](https://github.com/dtrott/maven-thrift-plugin)
 * [ccascone/mvn-thrift-compiler](https://github.com/ccascone/mvn-thrift-compiler)
 * [xolstice/protobuf-maven-plugin](https://github.com/xolstice/protobuf-maven-plugin)
-
+* [guide-java-plugin-development](https://maven.apache.org/guides/plugin/guide-java-plugin-development.html)

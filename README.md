@@ -60,3 +60,7 @@ staleMillis | 0 | only work when `checkStaleness`==`true`, thrift files' modify 
 * [ccascone/mvn-thrift-compiler](https://github.com/ccascone/mvn-thrift-compiler)
 * [xolstice/protobuf-maven-plugin](https://github.com/xolstice/protobuf-maven-plugin)
 * [guide-java-plugin-development](https://maven.apache.org/guides/plugin/guide-java-plugin-development.html)
+
+## contact
+
+mailto: zhfchdev@gmail.com

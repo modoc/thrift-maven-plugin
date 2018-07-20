@@ -4,11 +4,47 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!--<parent>-->
+        <!--<groupId>org.sonatype.oss</groupId>-->
+        <!--<artifactId>oss-parent</artifactId>-->
+        <!--<version>9</version>-->
+    <!--</parent>-->
+
     <groupId>io.potter.thrift</groupId>
     <artifactId>thrift-maven-plugin</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <packaging>maven-plugin</packaging>
     <name>Maven Thrift Plugin</name>
+
+    <url>
+        http://potter-io.github.io/thrift-maven-plugin
+    </url>
+    <description>
+        thrift compiler with pre-compiled archive, only work with java.
+    </description>
+
+    <developers>
+        <developer>
+            <name>Zhang Fucheng</name>
+            <email>zhfchdev@gmail.com</email>
+            <organization>potter-io</organization>
+            <url>http://github.potter.io</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>https://github.com/potter-io</url>
+        <connection>scm:git:https://github.com/potter-io/thrift-maven-plugin.git</connection>
+        <developerConnection>scm:git:https://github.com/potter-io/thrift-maven-plugin.git</developerConnection>
+    </scm>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <properties>
         <maven.version>3.5.3</maven.version>
@@ -97,6 +133,20 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>1.6</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
         <extensions>
             <extension>
@@ -106,5 +156,18 @@
             </extension>
         </extensions>
     </build>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>sonatype-oss</id>
+            <name>OSS Snapshots Repository</name>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>sonatype-oss</id>
+            <name>OSS Staging Repository</name>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
+        </repository>
+    </distributionManagement>
 
 </project>

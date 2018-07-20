@@ -2,7 +2,15 @@
 
 thrift compiler with pre-compiled archive, only work with java.
 
+    
+    <groupId>io.potter.thrift</groupId>
+    <artifactId>thrift-maven-plugin</artifactId>
+    <version>1.0</version>
+
 ## Usage
+
+This plugin is available in maven. However, io.potter.thrift:thriftc is not available now and I'll release it later.
+@ 2018.7.20
 
     <build>
         <extensions>
@@ -14,7 +22,7 @@ thrift compiler with pre-compiled archive, only work with java.
         </extensions>
         <plugins>
             <plugin>
-                <groupId>io.potter.thrift.tools</groupId>
+                <groupId>io.potter.thrift</groupId>
                 <artifactId>thrift-maven-plugin</artifactId>
                 <version>1.0-SNAPSHOT</version>
                 <configuration>

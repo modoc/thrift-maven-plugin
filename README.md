@@ -2,7 +2,6 @@
 
 thrift compiler with pre-compiled archive, only work with java.
 
-    
     <groupId>io.potter.thrift</groupId>
     <artifactId>thrift-maven-plugin</artifactId>
     <version>1.0</version>
@@ -11,6 +10,25 @@ thrift compiler with pre-compiled archive, only work with java.
 
 This plugin is available in maven. However, io.potter.thrift:thriftc is not available now and I'll release it later.
 @ 2018.7.20
+
+Only snapshot is used in `io.potter.thrift:thriftc`, so should set the repository first: 
+
+    <repositories>
+        <repository>
+            <id>sonatype-oss-snapshot</id>
+            <name>sonatype-oss-snapshot</name>
+            <url>https://oss.sonatype.org/content/groups/public/</url>
+            <layout>default</layout>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+Then set the thrift version: 
 
     <build>
         <extensions>
@@ -24,12 +42,12 @@ This plugin is available in maven. However, io.potter.thrift:thriftc is not avai
             <plugin>
                 <groupId>io.potter.thrift</groupId>
                 <artifactId>thrift-maven-plugin</artifactId>
-                <version>1.0-SNAPSHOT</version>
+                <version>1.0</version>
                 <configuration>
                     <!--<thriftExecutable>thrift</thriftExecutable>-->
                     <generator>java:private-members</generator>
                     <thriftSourceRoot>${project.basedir}/src/thrift/</thriftSourceRoot>
-                    <thriftArtifact>io.potter.thrift:thriftc:0.11.0:exe:${os.detected.classifier}</thriftArtifact>
+                    <thriftArtifact>io.potter.thrift:thriftc:0.11.0-SNAPSHOT:exe:${os.detected.classifier}</thriftArtifact>
                 </configuration>
                 <executions>
                     <execution>
